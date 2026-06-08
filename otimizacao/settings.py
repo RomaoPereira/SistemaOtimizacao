@@ -46,7 +46,7 @@ INSTALLED_APPS = [
     'corsheaders',
     'django_filters',
     # Local apps
-    'sensors',
+    'apps.sensors',
 ]
 
 MIDDLEWARE = [
