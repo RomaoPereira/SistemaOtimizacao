@@ -11,13 +11,30 @@ class BaseModel(models.Model):
     class Meta:
         abstract = True
 
+class Environment(BaseModel):
+    """
+    Representa um ambiente monitorado (ex: Sala de Reuniões, Laboratório).
+    """
+    name = models.CharField(max_length=255, help_text="Nome do ambiente")
+    is_occupied = models.BooleanField(default=False, help_text="Status de ocupação atual")
+    target_consumption = models.FloatField(null=True, blank=True, help_text="Meta de consumo em kWh")
+    
+    class Meta:
+        verbose_name = "Ambiente"
+        verbose_name_plural = "Ambientes"
+        ordering = ['name']
+
+    def __str__(self):
+        return self.name
+
 class Sensor(BaseModel):
     """
     Representa um sensor registrado no sistema IoT.
     """
-    name = models.CharField(max_length=255, help_text="Nome descritivo do sensor (Ex: Water Tank Sensor)")
-    type = models.CharField(max_length=100, help_text="Tipo do sensor (Ex: HC-SR04)")
-    unit = models.CharField(max_length=50, help_text="Unidade de medida (Ex: cm, °C, %)")
+    environment = models.ForeignKey(Environment, on_delete=models.CASCADE, related_name='sensors', null=True, blank=True, help_text="Ambiente onde o sensor está instalado")
+    name = models.CharField(max_length=255, help_text="Nome descritivo do sensor")
+    type = models.CharField(max_length=100, help_text="Tipo do sensor (Ex: HC-SR04, PIR, DS18B20)")
+    unit = models.CharField(max_length=50, blank=True, null=True, help_text="Unidade de medida (Ex: cm, °C, bool, kWh)")
 
     class Meta:
         verbose_name = "Sensor"
@@ -25,7 +42,8 @@ class Sensor(BaseModel):
         ordering = ['-created_at']
 
     def __str__(self):
-        return f"{self.name} ({self.type})"
+        env_name = self.environment.name if self.environment else "Sem Ambiente"
+        return f"{self.name} ({self.type}) - {env_name}"
 
 class Reading(BaseModel):
     """
@@ -34,10 +52,9 @@ class Reading(BaseModel):
     sensor = models.ForeignKey(Sensor, on_delete=models.CASCADE, related_name='readings')
     value = models.FloatField(
         validators=[
-            MinValueValidator(0.0, message="O valor não pode ser negativo"),
-            MaxValueValidator(400.0, message="O valor não pode ser maior que 400 (para sensores de 400cm)")
+            MinValueValidator(0.0, message="O valor não pode ser negativo")
         ],
-        help_text="Valor lido pelo sensor"
+        help_text="Valor lido pelo sensor (distância, temperatura, estado PIR, etc)"
     )
 
     class Meta:

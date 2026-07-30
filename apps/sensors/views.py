@@ -3,12 +3,21 @@ from django.db.models import Avg, Min, Max, Count
 from rest_framework import viewsets, views, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from django_filters.rest_framework import DjangoFilterBackend
-from .models import Sensor, Reading
-from .serializers import SensorSerializer, ReadingSerializer
+from .models import Environment, Sensor, Reading
+from .serializers import EnvironmentSerializer, SensorSerializer, ReadingSerializer
 from .utils import standard_response
 
 logger = logging.getLogger(__name__)
+
+class EnvironmentViewSet(viewsets.ModelViewSet):
+    """
+    Endpoint para gerenciar Ambientes.
+    """
+    queryset = Environment.objects.all()
+    serializer_class = EnvironmentSerializer
+    permission_classes = [IsAuthenticated]
 
 class SensorViewSet(viewsets.ReadOnlyModelViewSet):
     """
@@ -16,6 +25,7 @@ class SensorViewSet(viewsets.ReadOnlyModelViewSet):
     """
     queryset = Sensor.objects.all()
     serializer_class = SensorSerializer
+    permission_classes = [IsAuthenticated]
 
 
 class ReadingViewSet(viewsets.ModelViewSet):
@@ -29,6 +39,14 @@ class ReadingViewSet(viewsets.ModelViewSet):
     filterset_fields = ['sensor']
     http_method_names = ['get', 'post', 'head', 'options']
 
+    def get_permissions(self):
+        """
+        Permite que o Arduino envie dados (POST) sem token, mas exige login para ler (GET).
+        """
+        if self.action == 'create':
+            return [AllowAny()]
+        return [IsAuthenticated()]
+
     def create(self, request, *args, **kwargs):
         """
         Recebe uma nova leitura do Arduino.
@@ -37,8 +55,29 @@ class ReadingViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(data=request.data)
         
         if serializer.is_valid():
-            self.perform_create(serializer)
+            reading = serializer.save()
             logger.info("Leitura salva com sucesso.")
+            
+            # --- LÓGICA DE NEGÓCIO (RF04, RF06) ---
+            sensor = reading.sensor
+            environment = sensor.environment
+            
+            if environment:
+                # Se for sensor de presença (PIR)
+                if 'PIR' in sensor.type.upper() or 'PRESENÇA' in sensor.name.upper():
+                    # Supondo que 1.0 é ocupado e 0.0 é ocioso
+                    environment.is_occupied = (reading.value > 0)
+                    environment.save()
+                    logger.info(f"Ambiente '{environment.name}' atualizado para ocupado={environment.is_occupied}")
+                
+                # PREPARAÇÃO PARA O SENSOR DE CORRENTE (RF06 - Indícios de Desperdício)
+                # if 'CORRENTE' in sensor.type.upper() or 'SCT-013' in sensor.type.upper():
+                #     consumo_atual = reading.value
+                #     # Se o ambiente está ocioso mas o consumo é maior que o mínimo tolerável (ex: stand-by)
+                #     if not environment.is_occupied and consumo_atual > 0.5:
+                #         logger.warning(f"DESPERDÍCIO DETECTADO! Ambiente '{environment.name}' está VAZIO mas consumindo {consumo_atual}A.")
+                #         # Futuro: Criar um registro na tabela Alert ou disparar notificação
+
             return standard_response(
                 status="success",
                 message="Reading saved successfully",
