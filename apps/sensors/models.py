@@ -27,35 +27,32 @@ class Environment(BaseModel):
     def __str__(self):
         return self.name
 
-class Sensor(BaseModel):
+class Prototype(BaseModel):
     """
-    Representa um sensor registrado no sistema IoT.
+    Representa um Protótipo IoT (Nó) que contém múltiplos sensores embarcados.
     """
-    environment = models.ForeignKey(Environment, on_delete=models.CASCADE, related_name='sensors', null=True, blank=True, help_text="Ambiente onde o sensor está instalado")
-    name = models.CharField(max_length=255, help_text="Nome descritivo do sensor")
-    type = models.CharField(max_length=100, help_text="Tipo do sensor (Ex: HC-SR04, PIR, DS18B20)")
-    unit = models.CharField(max_length=50, blank=True, null=True, help_text="Unidade de medida (Ex: cm, °C, bool, kWh)")
+    environment = models.ForeignKey(Environment, on_delete=models.CASCADE, related_name='prototypes', null=True, blank=True, help_text="Ambiente onde o protótipo está instalado")
+    name = models.CharField(max_length=255, help_text="Nome descritivo do Protótipo (Ex: NodeMCU_Lab01)")
+    description = models.TextField(blank=True, null=True, help_text="Descrição ou anotações extras")
 
     class Meta:
-        verbose_name = "Sensor"
-        verbose_name_plural = "Sensores"
+        verbose_name = "Protótipo"
+        verbose_name_plural = "Protótipos"
         ordering = ['-created_at']
 
     def __str__(self):
         env_name = self.environment.name if self.environment else "Sem Ambiente"
-        return f"{self.name} ({self.type}) - {env_name}"
+        return f"{self.name} - {env_name}"
 
 class Reading(BaseModel):
     """
-    Modelo que armazena as leituras recebidas dos sensores.
+    Modelo que armazena as leituras recebidas do protótipo (pacote de dados).
     """
-    sensor = models.ForeignKey(Sensor, on_delete=models.CASCADE, related_name='readings')
-    value = models.FloatField(
-        validators=[
-            MinValueValidator(0.0, message="O valor não pode ser negativo")
-        ],
-        help_text="Valor lido pelo sensor (distância, temperatura, estado PIR, etc)"
-    )
+    prototype = models.ForeignKey(Prototype, on_delete=models.CASCADE, related_name='readings')
+    temperature = models.FloatField(null=True, blank=True, help_text="Temperatura em °C")
+    distance = models.FloatField(null=True, blank=True, help_text="Distância em cm")
+    presence = models.BooleanField(null=True, blank=True, help_text="Detectou Presença? (PIR)")
+    current = models.FloatField(null=True, blank=True, help_text="Corrente elétrica em Amperes")
 
     class Meta:
         verbose_name = "Leitura"
@@ -63,4 +60,4 @@ class Reading(BaseModel):
         ordering = ['-created_at']
 
     def __str__(self):
-        return f"Leitura: {self.value} {self.sensor.unit} do sensor '{self.sensor.name}'"
+        return f"Leitura do Protótipo '{self.prototype.name}' em {self.created_at.strftime('%Y-%m-%d %H:%M')}"

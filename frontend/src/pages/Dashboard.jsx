@@ -34,31 +34,54 @@ const StatCard = ({ title, value, icon: Icon, trend, trendValue, colorClass }) =
 
 const Dashboard = () => {
   const [stats, setStats] = useState({ total_readings: 0, average: 0, ambientes_ativos: 0, total_ambientes: 0 });
+  const [chartData, setChartData] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [statsRes, envRes] = await Promise.all([
+        const [statsRes, envRes, readingsRes] = await Promise.all([
           api.get('/statistics/'),
-          api.get('/environments/')
+          api.get('/environments/'),
+          api.get('/readings/')
         ]);
         
-        const envs = envRes.data.results || envRes.data || [];
+        // standard_response envelopa em res.data.data
+        const envData = envRes.data.data || {};
+        const envs = envData.results ? envData.results : (Array.isArray(envData) ? envData : []);
         const ativos = envs.filter(e => e.is_occupied).length;
         
+        const statsData = statsRes.data.data || {};
         setStats({
-          total_readings: statsRes.data.data.total_readings,
-          average: statsRes.data.data.average,
+          total_readings: statsData.total_readings || 0,
+          average: statsData.average || 0,
           ambientes_ativos: ativos,
           total_ambientes: envs.length
         });
+
+        const readingsData = readingsRes.data.data || {};
+        const readings = readingsData.results ? readingsData.results : (Array.isArray(readingsData) ? readingsData : []);
+        
+        // Pega os 15 mais recentes e inverte para o gráfico
+        const recentReadings = readings.slice(0, 15).reverse();
+        
+        const formattedData = recentReadings.map(reading => {
+          const date = new Date(reading.timestamp || reading.created_at);
+          return {
+            time: date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+            current: reading.current || 0
+          };
+        });
+
+        setChartData(formattedData);
+
       } catch (error) {
         console.error("Erro ao buscar dados do Dashboard", error);
       } finally {
         setIsLoading(false);
       }
     };
+    
     fetchData();
     const interval = setInterval(fetchData, 10000); // Atualiza a cada 10s
     return () => clearInterval(interval);
@@ -113,19 +136,18 @@ const Dashboard = () => {
       {/* Área do Gráfico */}
       <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-lg font-bold text-slate-800">Curva de Consumo (kWh)</h2>
+          <h2 className="text-lg font-bold text-slate-800">Curva de Corrente (Amperes)</h2>
           <select className="bg-slate-50 border border-slate-200 text-slate-700 rounded-lg px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-emerald-500">
+            <option>Tempo Real</option>
             <option>Hoje</option>
-            <option>Últimos 7 dias</option>
-            <option>Este Mês</option>
           </select>
         </div>
         
         <div className="h-[350px] w-full">
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={data} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+            <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
               <defs>
-                <linearGradient id="colorKwh" x1="0" y1="0" x2="0" y2="1">
+                <linearGradient id="colorCurrent" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
                   <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
                 </linearGradient>
@@ -137,7 +159,7 @@ const Dashboard = () => {
                 contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
                 labelStyle={{ fontWeight: 'bold', color: '#1e293b' }}
               />
-              <Area type="monotone" dataKey="kwh" stroke="#10b981" strokeWidth={3} fillOpacity={1} fill="url(#colorKwh)" />
+              <Area type="monotone" dataKey="current" stroke="#10b981" strokeWidth={3} fillOpacity={1} fill="url(#colorCurrent)" name="Corrente (A)" />
             </AreaChart>
           </ResponsiveContainer>
         </div>
