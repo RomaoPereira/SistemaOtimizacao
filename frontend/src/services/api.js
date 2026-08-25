@@ -2,7 +2,7 @@ import axios from 'axios';
 
 // Instância padrão do Axios configurada para se comunicar com o backend Django
 export const api = axios.create({
-  baseURL: 'http://localhost:8000/api/',
+  baseURL: 'https://romaopereira2307.pythonanywhere.com/api/',
   timeout: 5000,
 });
 
@@ -29,7 +29,7 @@ api.interceptors.response.use(
       try {
         const refresh_token = localStorage.getItem('refresh_token');
         if (refresh_token) {
-          const res = await axios.post('http://localhost:8000/api/token/refresh/', { refresh: refresh_token });
+          const res = await axios.post('https://romaopereira2307.pythonanywhere.com/api/token/refresh/', { refresh: refresh_token });
           localStorage.setItem('access_token', res.data.access);
           originalRequest.headers.Authorization = `Bearer ${res.data.access}`;
           return api(originalRequest);
